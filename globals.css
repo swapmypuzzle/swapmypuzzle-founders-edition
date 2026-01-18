@@ -1,0 +1,43 @@
+:root{
+  --smp-orange:#F08000;
+  --smp-teal:#008090;
+  --smp-bg:#ffffff;
+  --smp-ink:#102025;
+  --smp-muted:#5a6b73;
+  --smp-border:#e6ecef;
+  --smp-card:#f8fbfc;
+}
+
+*{ box-sizing:border-box; }
+html,body{ padding:0; margin:0; font-family: ui-rounded, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji"; background:var(--smp-bg); color:var(--smp-ink); }
+a{ color:inherit; text-decoration:none; }
+
+.container{ max-width:1100px; margin:0 auto; padding:18px; }
+
+.nav{ display:flex; align-items:center; justify-content:space-between; gap:14px; padding:12px 18px; border-bottom:1px solid var(--smp-border); position:sticky; top:0; background:rgba(255,255,255,0.92); backdrop-filter: blur(10px); }
+.navLeft{ display:flex; align-items:center; gap:10px; }
+.brandTitle{ font-weight:800; letter-spacing:-0.3px; }
+.badge{ font-size:12px; padding:4px 8px; border-radius:999px; background:var(--smp-card); border:1px solid var(--smp-border); color:var(--smp-muted); }
+.navLinks{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:flex-end; }
+
+.btn{ display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:10px 14px; border-radius:14px; border:1px solid var(--smp-border); background:#fff; cursor:pointer; font-weight:700; }
+.btnPrimary{ background:var(--smp-teal); color:#fff; border-color:transparent; }
+.btnOrange{ background:var(--smp-orange); color:#fff; border-color:transparent; }
+.btnGhost{ background:transparent; }
+.btn:disabled{ opacity:0.6; cursor:not-allowed; }
+
+.grid{ display:grid; grid-template-columns: repeat(12, 1fr); gap:14px; }
+.card{ background:var(--smp-card); border:1px solid var(--smp-border); border-radius:18px; padding:14px; }
+.cardTitle{ font-weight:800; margin:0 0 6px 0; }
+.muted{ color:var(--smp-muted); }
+
+.input, .select, .textarea{ width:100%; padding:10px 12px; border-radius:12px; border:1px solid var(--smp-border); background:#fff; font-size:14px; }
+.row{ display:flex; gap:10px; flex-wrap:wrap; }
+
+.kpi{ display:flex; gap:10px; flex-wrap:wrap; }
+.chip{ font-size:12px; padding:6px 10px; border-radius:999px; border:1px solid var(--smp-border); background:#fff; }
+
+@media (max-width: 860px){
+  .grid{ grid-template-columns: 1fr; }
+  .nav{ padding:10px 12px; }
+}
