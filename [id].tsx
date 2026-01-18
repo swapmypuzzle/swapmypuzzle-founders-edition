@@ -1,130 +1,146 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import Layout from '../../components/Layout';
 import { supabase } from '../../lib/supabaseClient';
-import type { Puzzle } from '../../lib/types';
+import type { Trade, Puzzle } from '../../lib/types';
 import Link from 'next/link';
 
-type Photo = { id: string; puzzle_id: string; url: string; created_at: string };
-
-export default function PuzzleDetail() {
+export default function TradeDetail() {
   const router = useRouter();
   const { id } = router.query as { id: string };
 
-  const [puzzle, setPuzzle] = useState<Puzzle | null>(null);
-  const [photos, setPhotos] = useState<Photo[]>([]);
-  const [myPuzzles, setMyPuzzles] = useState<Puzzle[]>([]);
-  const [offerId, setOfferId] = useState<string>('');
+  const [trade, setTrade] = useState<Trade | null>(null);
+  const [requested, setRequested] = useState<Puzzle | null>(null);
+  const [offered, setOffered] = useState<Puzzle | null>(null);
+  const [me, setMe] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  const [tracking, setTracking] = useState('');
 
   useEffect(() => {
     if (!id) return;
     (async () => {
-      setMsg(null);
-      const { data } = await supabase.from('puzzles').select('*').eq('id', id).single();
-      setPuzzle((data as Puzzle) ?? null);
-      const photosRes = await supabase.from('puzzle_photos').select('*').eq('puzzle_id', id).order('created_at');
-      setPhotos((photosRes.data as Photo[]) ?? []);
-
       const { data: u } = await supabase.auth.getUser();
-      if (u.user) {
-        const mine = await supabase.from('puzzles').select('*').eq('owner_id', u.user.id).order('created_at', { ascending: false });
-        setMyPuzzles((mine.data as Puzzle[]) ?? []);
+      setMe(u.user?.id ?? null);
+      const { data } = await supabase.from('trades').select('*').eq('id', id).single();
+      setTrade((data as Trade) ?? null);
+      if (data) {
+        const req = await supabase.from('puzzles').select('*').eq('id', data.requested_puzzle_id).single();
+        const off = await supabase.from('puzzles').select('*').eq('id', data.offered_puzzle_id).single();
+        setRequested((req.data as Puzzle) ?? null);
+        setOffered((off.data as Puzzle) ?? null);
       }
     })();
   }, [id]);
 
-  const canPropose = useMemo(() => {
-    if (!puzzle) return false;
-    return myPuzzles.length > 0;
-  }, [puzzle, myPuzzles.length]);
-
-  async function proposeTrade() {
+  async function updateStatus(status: Trade['status']) {
+    if (!trade) return;
     setMsg(null);
-    if (!puzzle) return;
-    const { data: u } = await supabase.auth.getUser();
-    if (!u.user) return setMsg('Please log in to propose a trade.');
-    if (!offerId) return setMsg('Pick one of your puzzles to offer.');
-    if (u.user.id === puzzle.owner_id) return setMsg('That’s your puzzle. (Nice try.)');
-
-    const { data: profile } = await supabase.from('profiles').select('country').eq('id', u.user.id).single();
-    const { data: ownerProfile } = await supabase.from('profiles').select('country').eq('id', puzzle.owner_id).single();
-    if ((profile?.country ?? 'US') !== 'US' || (ownerProfile?.country ?? 'US') !== 'US') {
-      return setMsg('US-only swaps for now.');
-    }
-
-    const shipBy = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
-
-    const { data, error } = await supabase.from('trades').insert({
-      requester_id: u.user.id,
-      responder_id: puzzle.owner_id,
-      requested_puzzle_id: puzzle.id,
-      offered_puzzle_id: offerId,
-      status: 'pending',
-      ship_by: shipBy
-    }).select('*').single();
-
-    if (error || !data) return setMsg(error?.message ?? 'Could not create trade');
-    router.push(`/trades/${data.id}`);
+    const { data, error } = await supabase.from('trades').update({ status }).eq('id', trade.id).select('*').single();
+    if (error) return setMsg(error.message);
+    setTrade(data as Trade);
   }
 
-  if (!puzzle) {
+  async function saveTracking() {
+    if (!trade || !me) return;
+    setMsg(null);
+    const payload: any = {};
+    if (me === trade.requester_id) payload.requester_tracking = tracking;
+    if (me === trade.responder_id) payload.responder_tracking = tracking;
+    const { data, error } = await supabase.from('trades').update(payload).eq('id', trade.id).select('*').single();
+    if (error) return setMsg(error.message);
+    setTrade(data as Trade);
+    setTracking('');
+  }
+
+  if (!trade) {
     return (
-      <Layout title="Puzzle — SwapMyPuzzle">
+      <Layout title="Trade — SwapMyPuzzle">
         <p className="muted">Loading…</p>
       </Layout>
     );
   }
 
+  const iAmResponder = me === trade.responder_id;
+  const iAmRequester = me === trade.requester_id;
+
   return (
-    <Layout title={`${puzzle.title} — SwapMyPuzzle`}>
-      <div className="grid">
+    <Layout title={`Trade ${trade.id.slice(0,8)} — SwapMyPuzzle`}>
+      <div className="row" style={{justifyContent:'space-between', alignItems:'center'}}>
+        <h2 className="cardTitle" style={{margin:0}}>Trade #{trade.id.slice(0, 8)}</h2>
+        <div className="badge">Status: {trade.status}</div>
+      </div>
+
+      <div className="grid" style={{marginTop:12}}>
         <div className="card" style={{gridColumn:'span 7'}}>
-          <h2 className="cardTitle">{puzzle.title}</h2>
-          <div className="muted">{puzzle.pieces ? `${puzzle.pieces} pieces` : 'Pieces unknown'} · {puzzle.brand ?? 'Brand unknown'} · {puzzle.condition ?? 'Condition unknown'}</div>
-          <div className="kpi" style={{marginTop:10}}>
-            <div className="chip">Missing: {puzzle.missing_pieces ?? 'Not specified'}</div>
-            <div className="chip">Theme: {puzzle.theme ?? '—'}</div>
+          <h3 className="cardTitle">Trade details</h3>
+          <div className="muted">Requested: <b>{requested?.title ?? '—'}</b></div>
+          <div className="muted">Offered: <b>{offered?.title ?? '—'}</b></div>
+          <div className="muted" style={{marginTop:8}}>Ship-by target: <b>{trade.ship_by ? new Date(trade.ship_by).toLocaleDateString() : '—'}</b></div>
+          <div className="row" style={{marginTop:12}}>
+            <Link className="btn" href={requested ? `/puzzles/${requested.id}` : '#'}>View requested</Link>
+            <Link className="btn" href={offered ? `/puzzles/${offered.id}` : '#'}>View offered</Link>
           </div>
-          {puzzle.notes && <p className="muted" style={{marginTop:10, whiteSpace:'pre-wrap'}}>{puzzle.notes}</p>}
 
           <div className="card" style={{marginTop:12}}>
-            <div className="cardTitle">Photos</div>
-            {photos.length === 0 ? (
-              <div className="muted">No photos yet.</div>
-            ) : (
-              <div className="row" style={{flexWrap:'wrap'}}>
-                {photos.map(ph => (
-                  <a key={ph.id} className="chip" href={ph.url} target="_blank" rel="noreferrer">View photo</a>
-                ))}
-              </div>
-            )}
+            <div className="cardTitle">Tracking</div>
+            <div className="muted">Your tracking is optional — but it reduces “did you ship?” anxiety by about 73%.</div>
+            <div className="row" style={{marginTop:10}}>
+              <input className="input" placeholder="Enter tracking number" value={tracking} onChange={(e)=>setTracking(e.target.value)} />
+              <button className="btn btnPrimary" onClick={saveTracking}>Save</button>
+            </div>
+            <div className="muted" style={{marginTop:10}}>
+              Requester tracking: {trade.requester_tracking ?? '—'}<br/>
+              Responder tracking: {trade.responder_tracking ?? '—'}
+            </div>
           </div>
         </div>
 
         <div className="card" style={{gridColumn:'span 5'}}>
-          <h3 className="cardTitle">Propose a trade</h3>
-          {!canPropose ? (
+          <h3 className="cardTitle">Actions</h3>
+
+          {trade.status === 'pending' && iAmResponder && (
+            <div className="row">
+              <button className="btn btnPrimary" onClick={()=>updateStatus('accepted')}>Accept</button>
+              <button className="btn" onClick={()=>updateStatus('declined')}>Decline</button>
+            </div>
+          )}
+
+          {trade.status === 'accepted' && (
             <>
-              <p className="muted">You need at least one listed puzzle to offer.</p>
-              <Link className="btn btnOrange" href="/add-puzzle">Add a puzzle</Link>
-            </>
-          ) : (
-            <>
-              <label className="muted">Offer one of your puzzles:</label>
-              <select className="select" value={offerId} onChange={(e)=>setOfferId(e.target.value)} style={{marginTop:6}}>
-                <option value="">Select…</option>
-                {myPuzzles.map(mp => (
-                  <option key={mp.id} value={mp.id}>{mp.title}</option>
-                ))}
-              </select>
-              <button className="btn btnPrimary" style={{marginTop:10}} onClick={proposeTrade}>Propose trade</button>
-              <p className="muted" style={{marginTop:10}}>
-                Each of you pays your own shipping. Ship-by target: <b>3 days</b>.
-              </p>
+              <p className="muted">Once you ship, mark it shipped. When both have shipped, mark delivered when received.</p>
+              <div className="row">
+                <button className="btn btnPrimary" onClick={()=>updateStatus('shipped')}>Mark shipped</button>
+                <button className="btn" onClick={()=>updateStatus('pending')}>Undo</button>
+              </div>
             </>
           )}
+
+          {trade.status === 'shipped' && (
+            <>
+              <p className="muted">When you receive the puzzle, mark delivered. Then rate the swap.</p>
+              <div className="row">
+                <button className="btn btnPrimary" onClick={()=>updateStatus('delivered')}>Mark delivered</button>
+              </div>
+            </>
+          )}
+
+          {trade.status === 'delivered' && (
+            <>
+              <p className="muted">Rate the puzzle you received (clean, complete, puzzle-ready) and the ship speed.</p>
+              <Link className="btn btnOrange" href={`/rate/${trade.id}`}>Rate this trade</Link>
+              <div className="row" style={{marginTop:10}}>
+                <button className="btn" onClick={()=>updateStatus('completed')}>Mark completed</button>
+              </div>
+            </>
+          )}
+
+          {trade.status === 'completed' && (
+            <p className="muted">Completed. May your next puzzle be missing zero pieces and only minimal corner frustration.</p>
+          )}
+
           {msg && <p className="muted">{msg}</p>}
+
+          {!me && <p className="muted">Log in to manage this trade.</p>}
         </div>
       </div>
     </Layout>
