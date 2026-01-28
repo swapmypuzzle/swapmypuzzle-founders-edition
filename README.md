@@ -57,3 +57,4 @@ Then in Vercel:
 You would need a **GoDaddy Web Hosting** plan where you can upload code and run Node.js.
 That is a different product than Website Builder.
 
+redeploy fix
